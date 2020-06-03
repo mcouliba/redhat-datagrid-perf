@@ -35,7 +35,7 @@ public class DataGridService {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger("CacheService");
 	
-	private static AtomicInteger count = new AtomicInteger();
+	private static AtomicInteger atomicCount = new AtomicInteger();
 
 	private RemoteCacheManager remoteCacheManager; 
 	
@@ -127,55 +127,50 @@ public class DataGridService {
 		RemoteCache<String, String> cache = retrieveRemoteCache(name);
 		if(cache != null) {
 			long start = Instant.now().toEpochMilli();
-	        int batchSize = 512;
-			StringBuffer sb = new StringBuffer(100 * 1024 * 1024);
+	        int batchSize = 2048;
+			int count = 0;
 			
 	        try (CloseableIterator<Entry<Object, Object>> iterator = cache.retrieveEntries(null, null, batchSize)) {
-				iterator.forEachRemaining(e -> {
-					sb.append(e.getValue().toString());
-				});
+				while (iterator.hasNext()) {
+					iterator.next();
+					count++;
+				}
 	        } catch (Exception e) {
 				LOGGER.error(e.getMessage());
 			}
 	        
 			long end = Instant.now().toEpochMilli();
 			
-	        return "Dumped entries in "+(end - start)+" ms\n" + sb.toString();
+	        return "Dumped " + count + " entries in "+(end - start)+" ms";
 		}
 		return null;
 	}
 
 	public String dumpMultiThread(String name) {
 		RemoteCache<String, String> cache = retrieveRemoteCache(name);
-
+		atomicCount.set(0);
 		if(cache != null) {
 			
-	        int batchSize = 512;
+	        int batchSize = 2048;
 	        CacheTopologyInfo cacheTopologyInfo = cache.getCacheTopologyInfo();
 			Map<SocketAddress, Set<Integer>> segmentsByAddress = cacheTopologyInfo.getSegmentsPerServer();
 
-			ExecutorService executorService = Executors.newFixedThreadPool(256);
+			ExecutorService executorService = Executors.newFixedThreadPool(segmentsByAddress.size());
 			
-			for (Set<Integer> segments: segmentsByAddress.values()) {
-				for (Integer segment: segments){
-					Set<Integer> segmentToRetrieve = new HashSet<Integer>();
-					segmentToRetrieve.add(segment);
+			long start = Instant.now().toEpochMilli();
 
+			for (Set<Integer> segments: segmentsByAddress.values()) {
 					executorService.submit(() -> {
-						int count = 0;
-						long start = Instant.now().toEpochMilli();
-						try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,segmentToRetrieve, batchSize)) {
+						try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,segments, batchSize)) {
 							
 							while (iterator.hasNext()) {
 								iterator.next();
-								count++;
+								atomicCount.incrementAndGet();
 							}
 						}
-						long end = Instant.now().toEpochMilli();
-						LOGGER.info("Dump of " + count + " entries by Thread ID: " + Thread.currentThread().getName() + " in " + (end - start) + " ms");
+						
+						LOGGER.info("Dumping by Thread ID: " + Thread.currentThread().getName());
 					});
-				}
-				
 			}
 
 			executorService.shutdown();
@@ -184,11 +179,12 @@ public class DataGridService {
 				if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
 					executorService.shutdownNow();
 				}
+				long end = Instant.now().toEpochMilli();
 			} catch (InterruptedException ex) {
 				executorService.shutdownNow();
 				Thread.currentThread().interrupt();
 			}
-	        return "Dumped done";
+	        return "Dumped " + atomicCount.get() + " entries in "+(end - start)+" ms";
 		}
 		return null;
 		
