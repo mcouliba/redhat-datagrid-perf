@@ -1,0 +1,14 @@
+apiVersion: infinispan.org/v1
+kind: Infinispan
+metadata:
+  name: rhdg
+spec:
+  replicas: 3
+  service:
+    type: DataGrid
+  container:
+    extraJvmOpts: "-XX:NativeMemoryTracking=summary"
+    cpu: "1000m"
+    memory: 4Gi
+  expose:
+    type: LoadBalancer
