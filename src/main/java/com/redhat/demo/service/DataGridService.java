@@ -179,11 +179,13 @@ public class DataGridService {
 				if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
 					executorService.shutdownNow();
 				}
-				long end = Instant.now().toEpochMilli();
+				
 			} catch (InterruptedException ex) {
 				executorService.shutdownNow();
 				Thread.currentThread().interrupt();
 			}
+			long end = Instant.now().toEpochMilli();
+
 	        return "Dumped " + atomicCount.get() + " entries in "+(end - start)+" ms";
 		}
 		return null;
@@ -207,7 +209,7 @@ public class DataGridService {
 	        
 			long end = Instant.now().toEpochMilli();
 
-			LOGGER.info("Dumped "+count+" entries in "+(end - start)+" ms");
+			// LOGGER.info("Dumped "+count+" entries in "+(end - start)+" ms");
 	        return sb.toString();
 		}
 		return null;
