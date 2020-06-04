@@ -11,8 +11,8 @@ ComponentSettings:
   Application: app
   Project: madou-rhdg
   Name: rhdg-client
-  MinMemory: 2Gi
-  MaxMemory: 2Gi
+  MinMemory: 4Gi
+  MaxMemory: 4Gi
   MinCPU: 4000m
   MaxCPU: 4000m
   Url:

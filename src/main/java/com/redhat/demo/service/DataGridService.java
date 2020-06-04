@@ -127,7 +127,7 @@ public class DataGridService {
 		RemoteCache<String, String> cache = retrieveRemoteCache(name);
 		if(cache != null) {
 			long start = Instant.now().toEpochMilli();
-	        int batchSize = 2048;
+	        int batchSize = 8192;
 			int count = 0;
 			
 	        try (CloseableIterator<Entry<Object, Object>> iterator = cache.retrieveEntries(null, null, batchSize)) {
@@ -146,21 +146,23 @@ public class DataGridService {
 		return null;
 	}
 
-	public String dumpMultiThread(String name) {
+	public String dumpMultiThread(String name, int threadNum) {
 		RemoteCache<String, String> cache = retrieveRemoteCache(name);
 		atomicCount.set(0);
 		if(cache != null) {
 			
-	        int batchSize = 2048;
+	        int batchSize = 8192;
 	        CacheTopologyInfo cacheTopologyInfo = cache.getCacheTopologyInfo();
 			Map<SocketAddress, Set<Integer>> segmentsByAddress = cacheTopologyInfo.getSegmentsPerServer();
 
-			ExecutorService executorService = Executors.newFixedThreadPool(segmentsByAddress.size());
+			ExecutorService executorService = Executors.newFixedThreadPool(threadNum);
 			
 			long start = Instant.now().toEpochMilli();
 
 			for (Set<Integer> segments: segmentsByAddress.values()) {
 					executorService.submit(() -> {
+						LOGGER.info("Dumping by Thread ID: " + Thread.currentThread().getName());
+						long subStart = Instant.now().toEpochMilli();
 						try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,segments, batchSize)) {
 							
 							while (iterator.hasNext()) {
@@ -168,8 +170,8 @@ public class DataGridService {
 								atomicCount.incrementAndGet();
 							}
 						}
-						
-						LOGGER.info("Dumping by Thread ID: " + Thread.currentThread().getName());
+						long subEnd = Instant.now().toEpochMilli();
+						LOGGER.info("Dumped by Thread ID: " + Thread.currentThread().getName() + " in "+(subEnd - subStart)+" ms");
 					});
 			}
 

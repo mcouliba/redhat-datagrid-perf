@@ -62,8 +62,8 @@ public class DataGridResource {
     @GET
     @Path("/dump/multithread")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response dumpMultiThread(@QueryParam(value = "name") String name) {
-        return Response.ok(dataGridService.dumpMultiThread(name)).build();
+    public Response dumpMultiThread(@QueryParam(value = "name") String name,@QueryParam(value = "threadNum") int threadNum) {
+        return Response.ok(dataGridService.dumpMultiThread(name, threadNum)).build();
     }
 
     @GET
