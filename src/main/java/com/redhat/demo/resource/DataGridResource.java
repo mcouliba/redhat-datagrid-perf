@@ -1,5 +1,9 @@
 package com.redhat.demo.resource;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -37,13 +41,6 @@ public class DataGridResource {
         return Response.ok(dataGridService.fillStringCache(entries, name, threadNum)).build();
     }
 
-    // @GET
-    // @Path("/fill/byte")
-    // @Produces(MediaType.APPLICATION_JSON)
-    // public Response fillByteCache(@QueryParam(value = "entries") int entries, @QueryParam(value = "name") String name, @QueryParam(value = "threadNum") int threadNum) {
-    //     return Response.ok(dataGridService.fillByteCache(entries, name, threadNum)).build();
-    // }
-
     @GET
     @Path("/fill/proto")
     @Produces(MediaType.APPLICATION_JSON)
@@ -54,8 +51,18 @@ public class DataGridResource {
     @GET
     @Path("/dump")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response dumpCache(@QueryParam(value = "name") String name, @QueryParam(value = "threadNum") int threadNum) {
+    public Response dumpCache(@QueryParam(value = "name") String name, @QueryParam(value = "threadNum") int threadNum) throws InterruptedException {
         return Response.ok(dataGridService.dumpCache(name, threadNum)).build();
+    }
+
+    @GET
+    @Path("/dump/segment")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response dumpSegment(@QueryParam(value = "name") String name, @QueryParam(value = "segment") List<Integer> Segment) throws InterruptedException {
+        Set<Integer> set = new HashSet<Integer>();
+        set.add(0);
+        set.add(1);
+        return Response.ok(dataGridService.dumpSegment(name, set)).build();
     }
 
     @GET

@@ -5,22 +5,30 @@ import static org.infinispan.query.remote.client.ProtobufMetadataManagerConstant
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.PostConstruct;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
+import javax.inject.Inject;
 
 import com.redhat.demo.model.Datapoint;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.infinispan.client.hotrod.CacheTopologyInfo;
 import org.infinispan.client.hotrod.RemoteCache;
 import org.infinispan.client.hotrod.RemoteCacheManager;
@@ -35,16 +43,32 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.quarkus.runtime.StartupEvent;
+import io.vertx.mutiny.core.Vertx;
+import io.vertx.mutiny.core.eventbus.EventBus;
 
 @ApplicationScoped
 public class DataGridService {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger("CacheService");
+	private static final Logger LOGGER = LoggerFactory.getLogger("DataGrid");
 	
+	private static final int BATCH_SIZE = 8192;
+
 	private static AtomicInteger atomicCount = new AtomicInteger();
 
 	private RemoteCacheManager remoteCacheManager; 
 	
+	@ConfigProperty(name = "application.podname")
+	private String podname;
+
+	// private static Map<String, String> concurrentHashMap = new ConcurrentHashMap<String, String>();
+	private static Map<String, String> concurrentHashMap = Collections.synchronizedMap(new HashMap<String, String>());
+
+	@Inject 
+	ManagedExecutor managedExecutor;
+
+	@Inject
+	EventBus bus;
+
 	private static final String CACHE_XML_CONFIG =
          "<infinispan><cache-container>" +
 			"  <distributed-cache-configuration name=\"%s\" statistics=\"false\" statistics-available=\"false\" segments=\"512\" owners=\"1\">" +
@@ -128,15 +152,14 @@ public class DataGridService {
 		if(cache != null) {
 			long start = Instant.now().toEpochMilli();
 
-			int putBatch = 10000;
-			Map<String, String> mapToPut = new HashMap<>(putBatch);
+			Map<String, String> mapToPut = new HashMap<>(BATCH_SIZE);
 			// Now we actually populate the cache
 			for (int i = 1; i < numentries + 1; ++i) {
 				String key = "SourceSignal$"+ i;
 				Datapoint datapoint = 
 					new Datapoint(key, "RTU$" + i, Instant.now().toEpochMilli(), i, i);
 				mapToPut.put(key, datapoint.toString());
-				if (i % putBatch == 0) {
+				if (i % BATCH_SIZE == 0) {
 					cache.putAll(mapToPut);
 					mapToPut.clear();
 				}
@@ -159,15 +182,14 @@ public class DataGridService {
 		if(cache != null) {
 			long start = Instant.now().toEpochMilli();
 
-			int putBatch = 10000;
-			Map<String, Datapoint> mapToPut = new HashMap<>(putBatch);
+			Map<String, Datapoint> mapToPut = new HashMap<>(BATCH_SIZE);
 			// Now we actually populate the cache
 			for (int i = 1; i < numentries + 1; ++i) {
 				String key = "SourceSignal$"+ i;
 				Datapoint datapoint = 
 					new Datapoint(key, "RTU$" + i, Instant.now().toEpochMilli(), i, i);
 				mapToPut.put(key, datapoint);
-				if (i % putBatch == 0) {
+				if (i % BATCH_SIZE == 0) {
 					cache.putAll(mapToPut);
 					mapToPut.clear();
 				}
@@ -182,102 +204,74 @@ public class DataGridService {
 		}
 		return null;
 	}
+	
+	// @ConsumeEvent("collect")               
+	// public void collectMessage(DatapointMessage message) {
+	// 	managedExecutor.submit(() -> {
+	// 		// LOGGER.info(message.getFilename() + " >>>>>> " + message.getDatapoint().toString());
 
-	// public String fillCache(int numentries, String name, int threadNum) {
-	// 	LOGGER.info("Fill Cache '"+ name+ "' with " + numentries +" entries...");
-	// 	int putBatch = 10000;
-	// 	int nbProcs = Runtime.getRuntime().availableProcessors();
-	// 	RemoteCache<String, Datapoint> cache = remoteCacheManager.getCache(name);
-
-	// 	if(cache != null) {
-	// 		long start = Instant.now().toEpochMilli();
-	// 		// ExecutorService executorService = Executors.newFixedThreadPool(threadNum);
+	// 		String filename = message.getFilename();
+	// 		String datapoint = message.getDatapoint().toString();
+	// 		String current = concurrentHashMap.get(filename);
 			
-	// 		Map<String, Datapoint> mapToPut = new HashMap<>(putBatch);
-
-	// 		// Now we actually populate the cache
-	// 		for (int i = 1; i < numentries + 1; ++i) {
-	// 			String key = "SourceSignal$"+ i;
-	// 			Datapoint datapoint = 
-	// 					new Datapoint(key, "RTU$" + i, Instant.now().toEpochMilli(), i, i);
-				
-	// 			// Now we actually populate the cache
-	// 			mapToPut.put(key, "datapoint");
-	// 			if (i % putBatch == 0) {
-	// 				cache.putAll(mapToPut);
-	// 				mapToPut.clear();
-	// 			}
-
-	// 			if (!mapToPut.isEmpty()) {
-	// 				cache.putAll(mapToPut);
-	// 			}
-
-	// 			// executorService.submit(() -> {
-	// 			// 	LOGGER.debug("Writing by Thread ID: " + Thread.currentThread().getName());
-	// 			// 	long subStart = Instant.now().toEpochMilli();
-	// 			// 	cache.put(key, datapoint);
-	// 			// 	long subEnd = Instant.now().toEpochMilli();
-	// 			// 	LOGGER.debug("Writing by Thread ID: " + Thread.currentThread().getName() + " in "+(subEnd - subStart)+" ms");
-	// 			// });
-	// 		}
-
-	// 		// executorService.shutdown();
-			
-	// 		// try {
-	// 		// 	if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
-	// 		// 		executorService.shutdownNow();
-	// 		// 	}
-				
-	// 		// } catch (InterruptedException ex) {
-	// 		// 	executorService.shutdownNow();
-	// 		// 	Thread.currentThread().interrupt();
-	// 		// }
-
-	//         long end = Instant.now().toEpochMilli();
-	//         return "Filled cache with "+numentries+" entries in "+(end - start)+" ms with " + nbProcs + " cores";
-	// 	}
-	// 	return null;
+	// 		concurrentHashMap.put(message.getFilename(), current == null ? datapoint : current + datapoint);
+	// 		// bus.sendAndForget("writeInFile", filename);
+	// 		// AsyncFile af = vertx.fileSystem().openBlocking(filename, new OpenOptions().setAppend(true));
+	// 		// af.writeAndForget(Buffer.buffer(datapoint));
+	// 		// af.close();
+	// 		// vertx.fileSystem().writeFileBlocking(filename, Buffer.buffer(concurrentHashMap.get(filename)));
+	// 	});
 	// }
 
-	public String dumpCache(String name, int threadNum) {
+	// @ConsumeEvent("writeInFile")               
+	// public void writeInFile(String filename) {
+	// 	vertx.fileSystem().writeFileBlocking(filename, Buffer.buffer(concurrentHashMap.get(filename)));
+	// }
+	
+	public String dumpCache(String name, int threadNum) throws InterruptedException {
 		LOGGER.info("Dump Cache '"+ name+ "'");
 
 		int nbProcs = Runtime.getRuntime().availableProcessors();
 		RemoteCache<String, Object> cache = remoteCacheManager.getCache(name);
 		atomicCount.set(0);
+		concurrentHashMap.clear();
+
 		if(cache != null) {
 			
-	        int batchSize = 8192;
 	        CacheTopologyInfo cacheTopologyInfo = cache.getCacheTopologyInfo();
 			Map<SocketAddress, Set<Integer>> segmentsByAddress = cacheTopologyInfo.getSegmentsPerServer();
 
 			ExecutorService executorService = Executors.newFixedThreadPool(threadNum);
 			
-			long start = Instant.now().toEpochMilli();
+			long readStart = Instant.now().toEpochMilli();
 
 			for (Set<Integer> segments: segmentsByAddress.values()) {
 				// for (Integer oneSegment: segments) {
 				// 	Set<Integer> oneSegmentSet = new HashSet<Integer>();
 				// 	oneSegmentSet.add(oneSegment);
 
-					executorService.submit(() -> {
-						LOGGER.debug("Dumping by Thread ID: " + Thread.currentThread().getName());
+					executorService.execute(() -> {
+						LOGGER.info("Dumping segments");
 						long subStart = Instant.now().toEpochMilli();
-						try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,segments, batchSize)) {
-							
+						try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,segments, BATCH_SIZE)) {
+						// try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,oneSegmentSet, batchSize)) {	
 							while (iterator.hasNext()) {
-								iterator.next();
+								Entry<Object, Object> entry = iterator.next();
+								Datapoint datapoint = (Datapoint) entry.getValue();
+
 								atomicCount.incrementAndGet();
+								String strDatapoint = datapoint.toString();
+								concurrentHashMap.put(datapoint.getSignalSource(), strDatapoint);
 							}
 						}
 						long subEnd = Instant.now().toEpochMilli();
-						LOGGER.debug("Dumped by Thread ID: " + Thread.currentThread().getName() + " in "+(subEnd - subStart)+" ms");
+						LOGGER.info("Dumped segments in "+(subEnd - subStart)+" ms");
 					});
 				// }
 			}
 
 			executorService.shutdown();
-			
+
 			try {
 				if (!executorService.awaitTermination(120, TimeUnit.SECONDS)) {
 					executorService.shutdownNow();
@@ -287,12 +281,65 @@ public class DataGridService {
 				executorService.shutdownNow();
 				Thread.currentThread().interrupt();
 			}
-			long end = Instant.now().toEpochMilli();
 
-	        return "Dumped " + atomicCount.get() + " entrie(s) in "+(end - start)+" ms with " + nbProcs + " core(s)";
+			long readEnd = Instant.now().toEpochMilli();
+
+			return "Dumped " + concurrentHashMap.size() + " entrie(s) in "+(readEnd - readStart)+" ms with " + nbProcs + " core(s) ";
 		}
 		return null;
-		
+	}
+
+	public String dumpSegment(String name, Set<Integer> segments) throws InterruptedException {
+		LOGGER.info("Dump Segment '"+ name+ "'");
+		long readStart = Instant.now().toEpochMilli();
+
+		RemoteCache<String, Object> cache = remoteCacheManager.getCache(name);
+		CompletionService<Integer> completionService = new ExecutorCompletionService<Integer>(managedExecutor);
+	   
+		if(cache != null) {
+			for (Integer oneSegment: segments) {
+				Set<Integer> oneSegmentSet = new HashSet<Integer>();
+				oneSegmentSet.add(oneSegment);
+				completionService.submit(() -> {
+					LOGGER.info("Dumping segments");
+					int count = 0;
+					long subStart = Instant.now().toEpochMilli();
+					try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,oneSegmentSet, BATCH_SIZE)) {	
+						while (iterator.hasNext()) {
+							Entry<Object, Object> entry = iterator.next();
+							Datapoint datapoint = (Datapoint) entry.getValue();
+							String strDatapoint = datapoint.toString();
+
+							count++;
+						}
+					}
+					long subEnd = Instant.now().toEpochMilli();
+					LOGGER.info("Dumped segments with " + count + " entries in "+(subEnd - subStart)+" ms");
+					return count;
+				});
+			}
+
+			int received = 0;
+			int globalCount = 0;
+			boolean errors = false;
+
+			while(received < segments.size() && !errors) {
+				Future<Integer> resultFuture = completionService.take(); //blocks if none available
+
+				try {
+					globalCount += resultFuture.get();
+					received ++;
+				}
+				catch(Exception e) {
+					LOGGER.error("Error when getting segments dumped");
+					errors = true;
+				}
+			}
+
+			long readEnd = Instant.now().toEpochMilli();
+			return "Dumped " + globalCount + " entrie(s) in "+(readEnd - readStart)+" ms by " + podname;
+		}
+		return null;
 	}
 
 	public String clearCache(String name) {
@@ -313,5 +360,25 @@ public class DataGridService {
 	
 	public void stopCacheManager() {
 		remoteCacheManager.stop();
+	}
+
+
+	public List<Set<Integer>> getSegments(String name) throws InterruptedException {
+		RemoteCache<String, Object> cache = remoteCacheManager.getCache(name);
+		List<Set<Integer>> result = null;
+
+		if(cache != null) {
+	        CacheTopologyInfo cacheTopologyInfo = cache.getCacheTopologyInfo();
+			Map<SocketAddress, Set<Integer>> segmentsByAddress = cacheTopologyInfo.getSegmentsPerServer();
+
+			Set<Integer> uniqueSegments = new HashSet<Integer>();
+
+			for (Set<Integer> segments: segmentsByAddress.values()) {
+				segments.removeAll(uniqueSegments);
+				uniqueSegments.addAll(segments);
+			};
+		}
+
+		return result;
 	}
 }

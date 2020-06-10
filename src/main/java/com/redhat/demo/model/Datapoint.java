@@ -47,12 +47,6 @@ public class Datapoint {
     
     @Override
    public String toString() {
-      return "Datapoint{" +
-            "signalSource='" + signalSource + '\'' +
-            ", rtuId='" + rtuId + '\'' +
-            ", linuxTimestamp='" + linuxTimestamp + '\'' +
-            ", qualityCode='" + qualityCode + '\'' +
-            ", value='" + value + '\'' +
-            '}';
+      return String.format("%s;%s;%d;%d;%.2f\n", signalSource, rtuId, linuxTimestamp, qualityCode, value);
    }
 }
