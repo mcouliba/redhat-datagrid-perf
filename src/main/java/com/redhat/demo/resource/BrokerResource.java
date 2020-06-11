@@ -1,8 +1,7 @@
 package com.redhat.demo.resource;
 
-import java.net.SocketAddress;
-import java.util.Arrays;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import javax.inject.Inject;
@@ -15,13 +14,17 @@ import javax.ws.rs.core.MediaType;
 import com.redhat.demo.service.BrokerService;
 import com.redhat.demo.service.DataGridService;
 
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.Uni;
 
 @Path("/broker")
 public class BrokerResource {
-
+    @Inject 
+    ManagedExecutor managedExecutor;
+    
     @Inject
     @RestClient
     BrokerService brokerService;
@@ -32,10 +35,11 @@ public class BrokerResource {
     @GET
     @Path("/dump")
     @Produces(MediaType.TEXT_PLAIN)
-    public Multi<String> dumpCache(@QueryParam(value = "name") String name) throws InterruptedException {
-        Map<SocketAddress, Set<Integer>> segmentsByAddress = dataGridService.getSegments(name);
+    public Multi<String> dumpCache(@QueryParam(value = "name") String name, @QueryParam(value = "size") int size) throws InterruptedException {
+        List<Set<Integer>> segmentSet = dataGridService.getSegments(name, size);
 
-        return Multi.createFrom().iterable(segmentsByAddress.values())
-                        .onItem().apply(segments -> brokerService.getBySegment(name, segments));
+        return Multi.createFrom().iterable(segmentSet)
+                        .onItem().produceUni(segments -> brokerService.getBySegment(name, segments))
+                        .merge(size);
     }   
 }

@@ -5,13 +5,16 @@ import static org.infinispan.query.remote.client.ProtobufMetadataManagerConstant
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
@@ -43,8 +46,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.quarkus.runtime.StartupEvent;
-import io.vertx.mutiny.core.Vertx;
-import io.vertx.mutiny.core.eventbus.EventBus;
+import io.smallrye.mutiny.Uni;
 
 @ApplicationScoped
 public class DataGridService {
@@ -66,9 +68,6 @@ public class DataGridService {
 	@Inject 
 	ManagedExecutor managedExecutor;
 
-	@Inject
-	EventBus bus;
-
 	private static final String CACHE_XML_CONFIG =
          "<infinispan><cache-container>" +
 			"  <distributed-cache-configuration name=\"%s\" statistics=\"false\" statistics-available=\"false\" segments=\"512\" owners=\"1\">" +
@@ -82,9 +81,7 @@ public class DataGridService {
 		"</cache-container></infinispan>";
 	
 	@PostConstruct
-    private void init() throws IOException {
-        LOGGER.info("init HotRod client");
-		
+    private void init() throws IOException {		
 		ConfigurationBuilder builder = new ConfigurationBuilder();
 		Properties properties = new Properties();
 
@@ -205,29 +202,6 @@ public class DataGridService {
 		return null;
 	}
 	
-	// @ConsumeEvent("collect")               
-	// public void collectMessage(DatapointMessage message) {
-	// 	managedExecutor.submit(() -> {
-	// 		// LOGGER.info(message.getFilename() + " >>>>>> " + message.getDatapoint().toString());
-
-	// 		String filename = message.getFilename();
-	// 		String datapoint = message.getDatapoint().toString();
-	// 		String current = concurrentHashMap.get(filename);
-			
-	// 		concurrentHashMap.put(message.getFilename(), current == null ? datapoint : current + datapoint);
-	// 		// bus.sendAndForget("writeInFile", filename);
-	// 		// AsyncFile af = vertx.fileSystem().openBlocking(filename, new OpenOptions().setAppend(true));
-	// 		// af.writeAndForget(Buffer.buffer(datapoint));
-	// 		// af.close();
-	// 		// vertx.fileSystem().writeFileBlocking(filename, Buffer.buffer(concurrentHashMap.get(filename)));
-	// 	});
-	// }
-
-	// @ConsumeEvent("writeInFile")               
-	// public void writeInFile(String filename) {
-	// 	vertx.fileSystem().writeFileBlocking(filename, Buffer.buffer(concurrentHashMap.get(filename)));
-	// }
-	
 	public String dumpCache(String name, int threadNum) throws InterruptedException {
 		LOGGER.info("Dump Cache '"+ name+ "'");
 
@@ -289,26 +263,26 @@ public class DataGridService {
 		return null;
 	}
 
-	public String dumpSegment(String name, Set<Integer> segments) throws InterruptedException {
-		LOGGER.info("Dump Segment '"+ name+ "'");
+	public Uni<String> dumpSegment(String name, Set<Integer> segments) {
+		LOGGER.debug("Dump Segment '"+ name+ "'");
 		long readStart = Instant.now().toEpochMilli();
 
 		RemoteCache<String, Object> cache = remoteCacheManager.getCache(name);
 		CompletionService<Integer> completionService = new ExecutorCompletionService<Integer>(managedExecutor);
 	   
 		if(cache != null) {
-			for (Integer oneSegment: segments) {
-				Set<Integer> oneSegmentSet = new HashSet<Integer>();
-				oneSegmentSet.add(oneSegment);
+			// for (Integer oneSegment: segments) {
+			// 	Set<Integer> oneSegmentSet = new HashSet<Integer>();
+			// 	oneSegmentSet.add(oneSegment);
 				completionService.submit(() -> {
 					LOGGER.info("Dumping segments");
 					int count = 0;
 					long subStart = Instant.now().toEpochMilli();
-					try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,oneSegmentSet, BATCH_SIZE)) {	
+					try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,segments, BATCH_SIZE)) {	
 						while (iterator.hasNext()) {
 							Entry<Object, Object> entry = iterator.next();
 							Datapoint datapoint = (Datapoint) entry.getValue();
-							String strDatapoint = datapoint.toString();
+							// String strDatapoint = datapoint.toString();
 
 							count++;
 						}
@@ -317,27 +291,43 @@ public class DataGridService {
 					LOGGER.info("Dumped segments with " + count + " entries in "+(subEnd - subStart)+" ms");
 					return count;
 				});
-			}
+			// }
+			
+			return Uni.createFrom().item(() -> {
+						Integer count = null;
+						try {
+							LOGGER.info("LA");
+							count = completionService.take().get();
+							LOGGER.info("HERE");
+						}
+						catch(Exception e) {
+							LOGGER.error("Error when getting segments dumped");
+						}
+						return count;
+					}).map(count -> {
+							long readEnd = Instant.now().toEpochMilli();
+							LOGGER.info("again");
+							return "Dumped " + count + " entrie(s) in "+(readEnd - readStart)+" ms by " + podname;
+						});
+			// int received = 0;
+			// int globalCount = 0;
+			// boolean errors = false;
 
-			int received = 0;
-			int globalCount = 0;
-			boolean errors = false;
+			// while(received < segments.size() && !errors) {
+			// 	Future<Integer> resultFuture = completionService.take(); //blocks if none available
 
-			while(received < segments.size() && !errors) {
-				Future<Integer> resultFuture = completionService.take(); //blocks if none available
+			// 	try {
+			// 		globalCount += resultFuture.get();
+			// 		received ++;
+			// 	}
+			// 	catch(Exception e) {
+			// 		LOGGER.error("Error when getting segments dumped");
+			// 		errors = true;
+			// 	}
+			// }
 
-				try {
-					globalCount += resultFuture.get();
-					received ++;
-				}
-				catch(Exception e) {
-					LOGGER.error("Error when getting segments dumped");
-					errors = true;
-				}
-			}
-
-			long readEnd = Instant.now().toEpochMilli();
-			return "Dumped " + globalCount + " entrie(s) in "+(readEnd - readStart)+" ms by " + podname;
+			// long readEnd = Instant.now().toEpochMilli();
+			// return "Dumped " + globalCount + " entrie(s) in "+(readEnd - readStart)+" ms by " + podname;
 		}
 		return null;
 	}
@@ -363,7 +353,7 @@ public class DataGridService {
 	}
 
 
-	public List<Set<Integer>> getSegments(String name) throws InterruptedException {
+	public List<Set<Integer>> getSegments(String name, int size) throws InterruptedException {
 		RemoteCache<String, Object> cache = remoteCacheManager.getCache(name);
 		List<Set<Integer>> result = null;
 
@@ -376,6 +366,18 @@ public class DataGridService {
 			for (Set<Integer> segments: segmentsByAddress.values()) {
 				segments.removeAll(uniqueSegments);
 				uniqueSegments.addAll(segments);
+			};
+
+			result = new ArrayList<Set<Integer>>(size);
+
+			for (int i = 0; i < size; i++){
+				result.add(new HashSet<Integer>());
+			}
+
+			int index = 0;
+			for (Integer segment : uniqueSegments){
+				result.get(index % size).add(segment);
+				index++;
 			};
 		}
 

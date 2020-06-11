@@ -27,6 +27,13 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
+      <!-- <dependency>
+        <groupId>org.infinispan</groupId>
+        <artifactId>infinispan-bom</artifactId>
+        <version>10.1.8.Final</version>
+        <type>pom</type>
+        <scope>import</scope>
+    </dependency> -->
     </dependencies>
   </dependencyManagement>
   <dependencies>
@@ -44,10 +51,44 @@
       <artifactId>rest-assured</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Infinispan -->
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-infinispan-client</artifactId>
+      <exclusions>
+          <exclusion>
+              <groupId>org.infinispan</groupId>
+              <artifactId>infinispan-client-hotrod</artifactId>
+          </exclusion>
+          <exclusion>
+              <groupId>org.infinispan</groupId>
+              <artifactId>infinispan-commons</artifactId>
+          </exclusion>
+      </exclusions>
     </dependency>
+    <!-- <dependency>
+      <groupId>org.infinispan</groupId>
+      <artifactId>infinispan-remote-query-client</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.infinispan.protostream</groupId>
+      <artifactId>protostream</artifactId>
+    </dependency> -->
+    <dependency>
+      <groupId>org.infinispan</groupId>
+      <artifactId>infinispan-client-hotrod</artifactId>
+      <version>10.1.9-SNAPSHOT</version>
+      <scope>system</scope>
+      <systemPath>${project.basedir}/lib/infinispan-client-hotrod-10.1.9-SNAPSHOT.jar</systemPath>
+    </dependency>
+    <dependency>
+      <groupId>org.infinispan</groupId>
+      <artifactId>infinispan-commons</artifactId>
+      <version>10.1.9-SNAPSHOT</version>
+      <scope>system</scope>
+      <systemPath>${project.basedir}/lib/infinispan-commons-10.1.9-SNAPSHOT.jar</systemPath>
+    </dependency>
+    <!-- END -->
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-resteasy-jsonb</artifactId>

@@ -9,6 +9,8 @@ import javax.ws.rs.QueryParam;
 
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
+import io.smallrye.mutiny.Uni;
+
 @Path("/cache")
 @RegisterRestClient
 public interface BrokerService {
@@ -16,5 +18,5 @@ public interface BrokerService {
 	@GET
     @Path("/dump/segment")
     @Produces("application/json")
-	String getBySegment(@QueryParam(value = "name") String name, @QueryParam(value = "segment") Set<Integer> Segment);
+	Uni<String> getBySegment(@QueryParam(value = "name") String name, @QueryParam(value = "segment") Set<Integer> Segment);
 }

@@ -1,7 +1,5 @@
 package com.redhat.demo.resource;
 
-import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 import javax.inject.Inject;
@@ -13,6 +11,8 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import com.redhat.demo.service.DataGridService;
+
+import io.smallrye.mutiny.Uni;
 
 @Path("/cache")
 public class DataGridResource {
@@ -58,11 +58,8 @@ public class DataGridResource {
     @GET
     @Path("/dump/segment")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response dumpSegment(@QueryParam(value = "name") String name, @QueryParam(value = "segment") List<Integer> Segment) throws InterruptedException {
-        Set<Integer> set = new HashSet<Integer>();
-        set.add(0);
-        set.add(1);
-        return Response.ok(dataGridService.dumpSegment(name, set)).build();
+    public Uni<Response> dumpSegment(@QueryParam(value = "name") String name, @QueryParam(value = "segment") Set<Integer> segment) throws InterruptedException {
+        return Uni.createFrom().item(Response.ok(dataGridService.dumpSegment(name, segment)).build());
     }
 
     @GET

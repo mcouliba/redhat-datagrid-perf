@@ -13,8 +13,8 @@ ComponentSettings:
   Name: rhdg-client
   MinMemory: 4Gi
   MaxMemory: 4Gi
-  MinCPU: 4000m
-  MaxCPU: 4000m
+  MinCPU: 2000m
+  MaxCPU: 2000m
   Url:
   - Name: rhdg-client
     Port: 8080
