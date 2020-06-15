@@ -70,7 +70,7 @@ public class DataGridService {
 
 	private static final String CACHE_XML_CONFIG =
          "<infinispan><cache-container>" +
-			"  <distributed-cache-configuration name=\"%s\" statistics=\"false\" statistics-available=\"false\" segments=\"512\" owners=\"1\">" +
+			"  <distributed-cache-configuration name=\"%s\" statistics=\"false\" statistics-available=\"false\" segments=\"512\" owners=\"2\">" +
 			"		<memory><binary strategy=\"NONE\">" +
 			"		</binary></memory>" +
 			"		<encoding>" +
@@ -263,7 +263,7 @@ public class DataGridService {
 		return null;
 	}
 
-	public Uni<String> dumpSegment(String name, Set<Integer> segments) {
+	public String dumpSegment(String name, Set<Integer> segments) throws InterruptedException {
 		LOGGER.debug("Dump Segment '"+ name+ "'");
 		long readStart = Instant.now().toEpochMilli();
 
@@ -274,7 +274,7 @@ public class DataGridService {
 			// for (Integer oneSegment: segments) {
 			// 	Set<Integer> oneSegmentSet = new HashSet<Integer>();
 			// 	oneSegmentSet.add(oneSegment);
-				completionService.submit(() -> {
+				// completionService.submit(() -> {
 					LOGGER.info("Dumping segments");
 					int count = 0;
 					long subStart = Instant.now().toEpochMilli();
@@ -289,29 +289,30 @@ public class DataGridService {
 					}
 					long subEnd = Instant.now().toEpochMilli();
 					LOGGER.info("Dumped segments with " + count + " entries in "+(subEnd - subStart)+" ms");
-					return count;
-				});
+					// return count;
+				// });
 			// }
 			
-			return Uni.createFrom().item(() -> {
-						Integer count = null;
-						try {
-							LOGGER.info("LA");
-							count = completionService.take().get();
-							LOGGER.info("HERE");
-						}
-						catch(Exception e) {
-							LOGGER.error("Error when getting segments dumped");
-						}
-						return count;
-					}).map(count -> {
-							long readEnd = Instant.now().toEpochMilli();
-							LOGGER.info("again");
-							return "Dumped " + count + " entrie(s) in "+(readEnd - readStart)+" ms by " + podname;
-						});
-			// int received = 0;
+			// return Uni.createFrom().item(() -> {
+			// 			Integer count = null;
+			// 			try {
+			// 				LOGGER.info("LA");
+			// 				count = completionService.take().get();
+			// 				LOGGER.info("HERE");
+			// 			}
+			// 			catch(Exception e) {
+			// 				LOGGER.error("Error when getting segments dumped");
+			// 			}
+			// 			return count;
+			// 		}).map(count -> {
+			// 				long readEnd = Instant.now().toEpochMilli();
+			// 				LOGGER.info("again");
+			// 				return "Dumped " + count + " entrie(s) in "+(readEnd - readStart)+" ms by " + podname;
+			// 			});
+			int received = 0;
 			// int globalCount = 0;
-			// boolean errors = false;
+			int globalCount = count;
+			boolean errors = false;
 
 			// while(received < segments.size() && !errors) {
 			// 	Future<Integer> resultFuture = completionService.take(); //blocks if none available
@@ -326,8 +327,8 @@ public class DataGridService {
 			// 	}
 			// }
 
-			// long readEnd = Instant.now().toEpochMilli();
-			// return "Dumped " + globalCount + " entrie(s) in "+(readEnd - readStart)+" ms by " + podname;
+			long readEnd = Instant.now().toEpochMilli();
+			return "Dumped " + globalCount + " entrie(s) in "+(readEnd - readStart)+" ms by " + podname;
 		}
 		return null;
 	}
