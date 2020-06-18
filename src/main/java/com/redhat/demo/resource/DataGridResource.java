@@ -23,8 +23,8 @@ public class DataGridResource {
     @GET
     @Path("/create")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response createCache(@QueryParam(value = "name") String name) {
-    	return Response.ok(dataGridService.createCache(name)).build();
+    public Response createCache(@QueryParam(value = "name") String name, @QueryParam(value = "segments") int segments, @QueryParam(value = "owners") int owners) {
+    	return Response.ok(dataGridService.createCache(name, segments, owners)).build();
     }
     
     @GET
@@ -44,8 +44,8 @@ public class DataGridResource {
     @GET
     @Path("/fill/proto")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response fillProtoCache(@QueryParam(value = "entries") int entries, @QueryParam(value = "name") String name, @QueryParam(value = "threadNum") int threadNum) {
-        return Response.ok(dataGridService.fillProtoCache(entries, name, threadNum)).build();
+    public Response fillProtoCache(@QueryParam(value = "entries") int entries, @QueryParam(value = "name") String name) {
+        return Response.ok(dataGridService.fillProtoCache(entries, name)).build();
     }
     
     @GET

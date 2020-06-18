@@ -3,12 +3,15 @@ kind: Infinispan
 metadata:
   name: rhdg
 spec:
+  container:
+    cpu: 1000m
+    extraJvmOpts: >-
+      -server -XX:+UseLargePages -XX:+UseG1GC
+      -XX:InitiatingHeapOccupancyPercent=70 -XX:MaxGCPauseMillis=3000
+      -XX:+DisableExplicitGC
+    memory: 4Gi
   replicas: 3
+  security:
+    endpointSecretName: rhdg-secret
   service:
     type: DataGrid
-  container:
-    extraJvmOpts: "-XX:NativeMemoryTracking=summary"
-    cpu: "1000m"
-    memory: 4Gi
-  expose:
-    type: LoadBalancer

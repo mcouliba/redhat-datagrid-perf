@@ -16,6 +16,7 @@ import com.redhat.demo.service.DataGridService;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.infinispan.commons.util.IntSet;
 
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
@@ -40,6 +41,6 @@ public class BrokerResource {
 
         return Multi.createFrom().iterable(segmentSet)
                         .onItem().produceUni(segments -> brokerService.getBySegment(name, segments))
-                        .merge(size);
+                        .merge();
     }   
 }

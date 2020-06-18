@@ -14,12 +14,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionService;
-import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -40,13 +36,13 @@ import org.infinispan.client.hotrod.marshall.MarshallerUtil;
 import org.infinispan.commons.api.CacheContainerAdmin;
 import org.infinispan.commons.configuration.XMLStringConfiguration;
 import org.infinispan.commons.util.CloseableIterator;
+import org.infinispan.commons.util.IntSets;
 import org.infinispan.protostream.SerializationContext;
 import org.infinispan.protostream.annotations.ProtoSchemaBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.quarkus.runtime.StartupEvent;
-import io.smallrye.mutiny.Uni;
 
 @ApplicationScoped
 public class DataGridService {
@@ -70,7 +66,7 @@ public class DataGridService {
 
 	private static final String CACHE_XML_CONFIG =
          "<infinispan><cache-container>" +
-			"  <distributed-cache-configuration name=\"%s\" statistics=\"false\" statistics-available=\"false\" segments=\"512\" owners=\"2\">" +
+			"  <distributed-cache-configuration name=\"%s\" statistics=\"false\" statistics-available=\"false\" segments=\"%d\" owners=\"%d\">" +
 			"		<memory><binary strategy=\"NONE\">" +
 			"		</binary></memory>" +
 			"		<encoding>" +
@@ -119,10 +115,10 @@ public class DataGridService {
         LOGGER.info("Starting Quarkus app... " + remoteCacheManager.getConfiguration().toString());
     }
 	
-	public boolean createCache(String name) {
+	public boolean createCache(String name, int segments, int owners) {
 		try {
 			remoteCacheManager.administration().withFlags(CacheContainerAdmin.AdminFlag.VOLATILE)
-				.getOrCreateCache(name, new XMLStringConfiguration(String.format(CACHE_XML_CONFIG, name)));
+				.getOrCreateCache(name, new XMLStringConfiguration(String.format(CACHE_XML_CONFIG, name, segments, owners)));
 			return true;
 		} catch (Exception e) {
 			LOGGER.error(e.getMessage());
@@ -172,7 +168,7 @@ public class DataGridService {
 		return null;
 	}
 
-	public String fillProtoCache(int numentries, String name, int threadNum) {
+	public String fillProtoCache(int numentries, String name) {
 		LOGGER.info("Fill Cache '"+ name+ "' with Protobuf Value");
 		RemoteCache<String, Datapoint> cache = remoteCacheManager.getCache(name);
 
@@ -220,15 +216,15 @@ public class DataGridService {
 			long readStart = Instant.now().toEpochMilli();
 
 			for (Set<Integer> segments: segmentsByAddress.values()) {
-				// for (Integer oneSegment: segments) {
-				// 	Set<Integer> oneSegmentSet = new HashSet<Integer>();
-				// 	oneSegmentSet.add(oneSegment);
+				for (Integer oneSegment: segments) {
+					Set<Integer> oneSegmentSet = new HashSet<Integer>();
+					oneSegmentSet.add(oneSegment);
 
 					executorService.execute(() -> {
-						LOGGER.info("Dumping segments");
+						LOGGER.debug("Dumping segments");
 						long subStart = Instant.now().toEpochMilli();
-						try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,segments, BATCH_SIZE)) {
-						// try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,oneSegmentSet, batchSize)) {	
+						// try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,segments, BATCH_SIZE)) {
+						try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,oneSegmentSet, BATCH_SIZE)) {	
 							while (iterator.hasNext()) {
 								Entry<Object, Object> entry = iterator.next();
 								Datapoint datapoint = (Datapoint) entry.getValue();
@@ -239,9 +235,9 @@ public class DataGridService {
 							}
 						}
 						long subEnd = Instant.now().toEpochMilli();
-						LOGGER.info("Dumped segments in "+(subEnd - subStart)+" ms");
+						LOGGER.debug("Dumped segments in "+(subEnd - subStart)+" ms");
 					});
-				// }
+				}
 			}
 
 			executorService.shutdown();
@@ -268,14 +264,14 @@ public class DataGridService {
 		long readStart = Instant.now().toEpochMilli();
 
 		RemoteCache<String, Object> cache = remoteCacheManager.getCache(name);
-		CompletionService<Integer> completionService = new ExecutorCompletionService<Integer>(managedExecutor);
+		// CompletionService<Integer> completionService = new ExecutorCompletionService<Integer>(managedExecutor);
 	   
 		if(cache != null) {
 			// for (Integer oneSegment: segments) {
 			// 	Set<Integer> oneSegmentSet = new HashSet<Integer>();
 			// 	oneSegmentSet.add(oneSegment);
 				// completionService.submit(() -> {
-					LOGGER.info("Dumping segments");
+					LOGGER.debug("Dumping segments");
 					int count = 0;
 					long subStart = Instant.now().toEpochMilli();
 					try (CloseableIterator<Map.Entry<Object, Object>> iterator = cache.retrieveEntries(null,segments, BATCH_SIZE)) {	
@@ -288,7 +284,7 @@ public class DataGridService {
 						}
 					}
 					long subEnd = Instant.now().toEpochMilli();
-					LOGGER.info("Dumped segments with " + count + " entries in "+(subEnd - subStart)+" ms");
+					LOGGER.debug("Dumped segments with " + count + " entries in "+(subEnd - subStart)+" ms");
 					// return count;
 				// });
 			// }
@@ -360,26 +356,30 @@ public class DataGridService {
 
 		if(cache != null) {
 	        CacheTopologyInfo cacheTopologyInfo = cache.getCacheTopologyInfo();
-			Map<SocketAddress, Set<Integer>> segmentsByAddress = cacheTopologyInfo.getSegmentsPerServer();
+			if (size == 1) {
+   				result = Collections.singletonList(IntSets.immutableRangeSet(cacheTopologyInfo.getNumSegments()));
+			} else {
+				Map<SocketAddress, Set<Integer>> segmentsByAddress = cacheTopologyInfo.getSegmentsPerServer();
 
-			Set<Integer> uniqueSegments = new HashSet<Integer>();
+				Set<Integer> uniqueSegments = new HashSet<Integer>();
 
-			for (Set<Integer> segments: segmentsByAddress.values()) {
-				segments.removeAll(uniqueSegments);
-				uniqueSegments.addAll(segments);
-			};
+				for (Set<Integer> segments: segmentsByAddress.values()) {
+					segments.removeAll(uniqueSegments);
+					uniqueSegments.addAll(segments);
+				};
 
-			result = new ArrayList<Set<Integer>>(size);
+				result = new ArrayList<Set<Integer>>(size);
 
-			for (int i = 0; i < size; i++){
-				result.add(new HashSet<Integer>());
+				for (int i = 0; i < size; i++){
+					result.add(new HashSet<Integer>());
+				}
+
+				int index = 0;
+				for (Integer segment : uniqueSegments){
+					result.get(index % size).add(segment);
+					index++;
+				};
 			}
-
-			int index = 0;
-			for (Integer segment : uniqueSegments){
-				result.get(index % size).add(segment);
-				index++;
-			};
 		}
 
 		return result;

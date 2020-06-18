@@ -9,12 +9,12 @@ ComponentSettings:
   - 8443/TCP
   - 8778/TCP
   Application: app
-  Project: madou-rhdg
+  Project: spectrum-rhdg
   Name: rhdg-client
   MinMemory: 4Gi
   MaxMemory: 4Gi
-  MinCPU: 2000m
-  MaxCPU: 2000m
+  MinCPU: 1000m
+  MaxCPU: 1000m
   Url:
   - Name: rhdg-client
     Port: 8080
