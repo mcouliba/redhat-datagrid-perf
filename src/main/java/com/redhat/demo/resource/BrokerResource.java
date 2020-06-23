@@ -1,6 +1,5 @@
 package com.redhat.demo.resource;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -11,24 +10,20 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 
-import com.redhat.demo.service.BrokerService;
+import com.redhat.demo.message.DumpSegmentMessage;
+import com.redhat.demo.service.ClientService;
 import com.redhat.demo.service.DataGridService;
 
-import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
-import org.infinispan.commons.util.IntSet;
 
 import io.smallrye.mutiny.Multi;
-import io.smallrye.mutiny.Uni;
+import io.vertx.mutiny.core.eventbus.EventBus;
+import io.vertx.mutiny.core.eventbus.Message;
 
 @Path("/broker")
 public class BrokerResource {
-    @Inject 
-    ManagedExecutor managedExecutor;
-    
     @Inject
-    @RestClient
-    BrokerService brokerService;
+    EventBus bus;
 
     @Inject
 	DataGridService dataGridService;
@@ -38,9 +33,14 @@ public class BrokerResource {
     @Produces(MediaType.TEXT_PLAIN)
     public Multi<String> dumpCache(@QueryParam(value = "name") String name, @QueryParam(value = "size") int size) throws InterruptedException {
         List<Set<Integer>> segmentSet = dataGridService.getSegments(name, size);
-
+        
         return Multi.createFrom().iterable(segmentSet)
-                        .onItem().produceUni(segments -> brokerService.getBySegment(name, segments))
+                        // .onItem().produceUni(segments -> brokerService.getBySegment(name, segments))
+                        .onItem().produceUni(segments -> {
+                            DumpSegmentMessage message = new DumpSegmentMessage(name, segments);
+                            return bus.<String>request("dump-segments", message.toJsonObject())
+                                .onItem().apply(Message::body);
+                        })
                         .merge();
     }   
 }

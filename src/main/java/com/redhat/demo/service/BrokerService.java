@@ -1,22 +1,29 @@
 package com.redhat.demo.service;
 
+import java.util.HashSet;
 import java.util.Set;
 
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
+import javax.inject.Inject;
 
-import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 
+import io.quarkus.vertx.ConsumeEvent;
 import io.smallrye.mutiny.Uni;
+import io.vertx.core.json.JsonObject;
 
-@Path("/cache")
-@RegisterRestClient
-public interface BrokerService {
-	
-	@GET
-    @Path("/dump/segment")
-    @Produces("application/json")
-	Uni<String> getBySegment(@QueryParam(value = "name") String name, @QueryParam(value = "segment") Set<Integer> Segment);
+public class BrokerService {
+    
+    @Inject
+    @RestClient
+    ClientService clientService;
+
+    @ConsumeEvent(value = "dump-segments")
+    Uni<String> consume(JsonObject jsonObject) {
+        String cacheName = jsonObject.getString("cacheName");
+        Set<Integer> segments = new HashSet<Integer>();
+        for(Object segment: jsonObject.getJsonArray("segments")) {
+            segments.add((Integer) segment);
+        }
+        return clientService.getBySegment(cacheName, segments);
+    }
 }

@@ -1,0 +1,15 @@
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDataSource
+metadata:
+  name: rhdg-grafanadatasource
+  namespace: spectrum-rhdg
+spec:
+  datasources:
+    - access: proxy
+      editable: true
+      name: Prometheus
+      url: 'http://prometheus-operated:9090'
+      isDefault: true
+      version: 1
+      type: prometheus
+  name: rhdg-datasources.yaml

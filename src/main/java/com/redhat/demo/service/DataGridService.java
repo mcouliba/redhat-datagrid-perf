@@ -66,7 +66,7 @@ public class DataGridService {
 
 	private static final String CACHE_XML_CONFIG =
          "<infinispan><cache-container>" +
-			"  <distributed-cache-configuration name=\"%s\" statistics=\"false\" statistics-available=\"false\" segments=\"%d\" owners=\"%d\">" +
+			"  <distributed-cache-configuration name=\"%s\" segments=\"%d\" owners=\"%d\">" +
 			"		<memory><binary strategy=\"NONE\">" +
 			"		</binary></memory>" +
 			"		<encoding>" +

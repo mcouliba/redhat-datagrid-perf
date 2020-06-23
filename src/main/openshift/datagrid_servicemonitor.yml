@@ -1,0 +1,24 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    k8s-app: prometheus
+  name: datagrid-monitoring
+  namespace: spectrum-rhdg
+spec:
+  endpoints:
+    - basicAuth:
+        password:
+          key: password
+          name: basic-auth
+        username:
+          key: username
+          name: basic-auth
+      interval: 30s
+  namespaceSelector:
+    matchNames:
+      - spectrum-rhdg
+  selector:
+    matchLabels:
+      app: infinispan-service
+      clusterName: rhdg
